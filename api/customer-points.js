@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-     res.setHeader("Access-Control-Allow-Origin", "https://yuriwoori.com");
+  res.setHeader("Access-Control-Allow-Origin", "https://yuriwoori.com");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -19,10 +19,10 @@ export default async function handler(req, res) {
         "Content-Type": "application/json"
       }
     });
-
+    console.log(email);
     const customers = await customerRes.json();
     const customer = customers.customers?.[0];
-
+    console.log(customers);
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     const metafieldsRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`, {
@@ -33,8 +33,8 @@ export default async function handler(req, res) {
 
     const metafields = await metafieldsRes.json();
 
-    const total = metafields.metafields.find(mf => mf.namespace === 'rewards' && mf.key === 'total');
-    const breakdown = metafields.metafields.find(mf => mf.namespace === 'rewards' && mf.key === 'breakdown');
+    const total = metafields.metafields.find(mf => mf.namespace === 'total' && mf.key === 'total');
+    const breakdown = metafields.metafields.find(mf => mf.namespace === 'breakdown' && mf.key === 'breakdown');
 
     return res.status(200).json({
       total: total?.value || 0,
