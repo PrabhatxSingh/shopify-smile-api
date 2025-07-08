@@ -1,35 +1,99 @@
 export default async function handler(req, res) {
-  const SMILE_PRIVATE_KEY = process.env.SMILE_PRIVATE_KEY;
+  const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;
+  const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
+  
   const { email, action } = req.query;
 
   const ACTIONS = {
-    instagram: { reason: "Followed on Instagram", points: 50 },
-    facebook: { reason: "Liked on Facebook", points: 50 },
+    instagram: { points: 50, label: "Followed Instagram" },
+    signup:    { points: 100, label: "Signup Bonus" },
+    facebook:  { points: 50, label: "Liked Facebook" }
   };
 
   if (!email || !ACTIONS[action]) {
-    return res.status(400).json({ error: "Invalid email or action" });
+    return res.status(400).json({ error: "Invalid parameters" });
   }
 
   try {
-    const response = await fetch("https://api.smile.io/v1/points", {
-      method: "POST",
+    // 1. Lookup Customer by Email
+    const customers = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/search.json?query=email:${email}`, {
       headers: {
-        Authorization: "Basic " + Buffer.from(SMILE_PRIVATE_KEY + ":").toString("base64"),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        customer_email: email,
-        points: ACTIONS[action].points,
-        reason: ACTIONS[action].reason,
-      }),
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+        "Content-Type": "application/json"
+      }
+    }).then(res => res.json());
+
+    const customer = customers.customers?.[0];
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+    // 2. Read Existing Metafields
+    const metafields = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`, {
+      headers: {
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN
+      }
+    }).then(res => res.json());
+
+    const totalField = metafields.metafields.find(mf => mf.namespace === 'rewards' && mf.key === 'total');
+    const breakdownField = metafields.metafields.find(mf => mf.namespace === 'rewards' && mf.key === 'breakdown');
+
+    const currentTotal = parseInt(totalField?.value || "0");
+    const breakdown = breakdownField?.value ? JSON.parse(breakdownField.value) : [];
+
+    // 3. Prevent duplicate actions (optional)
+    if (breakdown.some(entry => entry.action === action)) {
+      return res.status(409).json({ error: "Already rewarded for this action" });
+    }
+
+    // 4. Add new record
+    breakdown.push({
+      date: new Date().toISOString(),
+      action,
+      label: ACTIONS[action].label,
+      points: ACTIONS[action].points
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Smile API error");
+    const newTotal = currentTotal + ACTIONS[action].points;
 
-    res.status(200).json({ message: "Points awarded successfully" });
+    // 5. Update metafields
+    const updateTotal = fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields/${totalField?.id || ''}`, {
+      method: totalField ? "PUT" : "POST",
+      headers: {
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        metafield: {
+          namespace: "rewards",
+          key: "total",
+          value: newTotal,
+          type: "number_integer",
+          ...(totalField ? { id: totalField.id } : {})
+        }
+      })
+    });
+
+    const updateBreakdown = fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields/${breakdownField?.id || ''}`, {
+      method: breakdownField ? "PUT" : "POST",
+      headers: {
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        metafield: {
+          namespace: "rewards",
+          key: "breakdown",
+          value: JSON.stringify(breakdown),
+          type: "json",
+          ...(breakdownField ? { id: breakdownField.id } : {})
+        }
+      })
+    });
+
+    await Promise.all([updateTotal, updateBreakdown]);
+
+    return res.status(200).json({ message: "Points awarded successfully", total: newTotal });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }
