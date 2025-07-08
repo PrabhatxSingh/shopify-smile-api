@@ -33,8 +33,8 @@ export default async function handler(req, res) {
       }
     }).then(res => res.json());
 
-    const totalField = metafields.metafields.find(mf => mf.namespace === 'rewards' && mf.key === 'total');
-    const breakdownField = metafields.metafields.find(mf => mf.namespace === 'rewards' && mf.key === 'breakdown');
+    const totalField = metafields.metafields.find(mf => mf.namespace === 'total' && mf.key === 'total');
+    const breakdownField = metafields.metafields.find(mf => mf.namespace === 'breakdown' && mf.key === 'breakdown');
 
     const currentTotal = parseInt(totalField?.value || "0");
     const breakdown = breakdownField?.value ? JSON.parse(breakdownField.value) : [];
