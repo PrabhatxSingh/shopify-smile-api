@@ -32,10 +32,11 @@ export default async function handler(req, res) {
     });
 
     const metafields = await metafieldsRes.json();
-
+    console.log("metafields", metafields);
     const total = metafields.metafields.find(mf => mf.namespace === 'total' && mf.key === 'total');
     const breakdown = metafields.metafields.find(mf => mf.namespace === 'breakdown' && mf.key === 'breakdown');
-
+    console.log("total", total);
+    console.log("breakdown", breakdown);
     return res.status(200).json({
       total: total?.value || 0,
       breakdown: breakdown?.value ? JSON.parse(breakdown.value) : []
