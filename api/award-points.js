@@ -75,7 +75,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         metafield: {
-          namespace: "rewards",
+          namespace: "total",
           key: "total",
           value: newTotal,
           type: "number_integer",
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         metafield: {
-          namespace: "rewards",
+          namespace: "breakdown",
           key: "breakdown",
           value: JSON.stringify(breakdown),
           type: "json",
