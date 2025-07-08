@@ -44,7 +44,7 @@ export default async function handler(req, res) {
         "X-Shopify-Access-Token": SHOPIFY_TOKEN
       }
     }).then(res => res.json());
-    console.log(metafields
+    console.log(metafields);
     const totalField = metafields.metafields.find(mf => mf.namespace === 'total' && mf.key === 'total');
     const breakdownField = metafields.metafields.find(mf => mf.namespace === 'breakdown' && mf.key === 'breakdown');
 
