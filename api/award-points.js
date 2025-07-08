@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;
   const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
   
-  const { email, action } = req.query;
+  const { email, action } = req.body;
 
   const ACTIONS = {
     instagram: { points: 50, label: "Followed Instagram" },
