@@ -31,6 +31,8 @@ export default async function handler(req, res) {
     });
     const customers = await customerRes.json();
     const customer = customers.customers?.[0];
+    console.log(customer);
+    
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     // Get existing metafields
