@@ -93,7 +93,19 @@ export default async function handler(req, res) {
       });
 
       const createData = await createRes.json();
-      breakdown = createData?.data?.metafieldsSet?.metafields?.[0] || null;
+      console.log("createData", JSON.stringify(createData, null, 2));
+
+      if (
+        createData?.data?.metafieldsSet?.userErrors?.length > 0 ||
+        !createData?.data?.metafieldsSet?.metafields?.length
+      ) {
+        return res.status(500).json({ 
+          error: "Failed to create breakdown metafield", 
+          details: createData?.data?.metafieldsSet?.userErrors 
+        });
+      }
+
+      breakdown = createData.data.metafieldsSet.metafields[0];
     }
     
     return res.status(200).json({
