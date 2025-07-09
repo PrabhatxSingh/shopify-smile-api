@@ -49,7 +49,7 @@ export default async function handler(req, res) {
       (mf) => mf.namespace === "custom" && mf.key === "breakdown"
     );
     console.log("total", total);
-    console.log("breakdown", total);
+    console.log("breakdown", breakdown);
     return res.status(200).json({
       total: total?.value || 0,
       breakdown: breakdown?.value ? JSON.parse(breakdown.value) : []
