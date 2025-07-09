@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 
   try {
-    // 🔍 Search customer by email
+    // Search customer by email
     const customerRes = await fetch(
       `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/search.json?query=email:${email}`,
       {
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     const customer = customers.customers?.[0];
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
-    // 🧾 Fetch customer metafields
+    // Fetch customer metafields
     const metafieldsRes = await fetch(
       `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`,
       {
@@ -43,10 +43,10 @@ export default async function handler(req, res) {
     const metafields = await metafieldsRes.json();
 
     const total = metafields.metafields.find(
-      (mf) => mf.namespace === "rewards" && mf.key === "total"
+      (mf) => mf.namespace === "custom" && mf.key === "total"
     );
     const breakdown = metafields.metafields.find(
-      (mf) => mf.namespace === "rewards" && mf.key === "breakdown"
+      (mf) => mf.namespace === "custom" && mf.key === "breakdown"
     );
     console.log("total", total);
     console.log("breakdown", total);

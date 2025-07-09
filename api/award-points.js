@@ -47,10 +47,10 @@ export default async function handler(req, res) {
     );
     const metafieldsData = await metafieldsRes.json();
     const totalField = metafieldsData.metafields.find(
-      (mf) => mf.namespace === "rewards" && mf.key === "total"
+      (mf) => mf.namespace === "custom" && mf.key === "total"
     );
     const breakdownField = metafieldsData.metafields.find(
-      (mf) => mf.namespace === "rewards" && mf.key === "breakdown"
+      (mf) => mf.namespace === "custom" && mf.key === "breakdown"
     );
 
     const currentTotal = parseInt(totalField?.value || "0");
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           metafield: {
             ...(totalField ? { id: totalField.id } : {}),
-            namespace: "rewards",
+            namespace: "custom",
             key: "total",
             type: "number_integer",
             value: newTotal.toString()
@@ -104,7 +104,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           metafield: {
             ...(breakdownField ? { id: breakdownField.id } : {}),
-            namespace: "rewards",
+            namespace: "custom",
             key: "breakdown",
             type: "json",
             value: JSON.stringify(breakdown)
@@ -114,8 +114,7 @@ export default async function handler(req, res) {
     );
 
     await Promise.all([updateTotal, updateBreakdown]);
-    console.log("newTotal", newTotal);
-    console.log("breakdown", breakdown);
+
     return res.status(200).json({ message: "Points awarded successfully", total: newTotal });
   } catch (err) {
     return res.status(500).json({ error: err.message || "Internal Server Error" });
