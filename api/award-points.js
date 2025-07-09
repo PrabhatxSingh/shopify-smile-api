@@ -13,8 +13,8 @@ export default async function handler(req, res) {
 
   const ACTIONS = {
     instagram: { points: 50, label: "Followed Instagram" },
-    signup: { points: 100, label: "Signup Bonus" },
-    facebook: { points: 50, label: "Liked Facebook" }
+    signup:    { points: 100, label: "Signup Bonus" },
+    facebook:  { points: 50, label: "Liked Facebook" }
   };
 
   if (!email || !ACTIONS[action]) {
@@ -22,46 +22,76 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Step 1: Get customer by email
-    const customersRes = await fetch(
-      `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/search.json?query=email:${email}`,
-      {
+    // Get customer
+    const customerRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/search.json?query=email:${email}`, {
+      headers: {
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+        "Content-Type": "application/json"
+      }
+    });
+    const customers = await customerRes.json();
+    const customer = customers.customers?.[0];
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+    // Get existing metafields
+    const metafieldsRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`, {
+      headers: {
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN
+      }
+    });
+    const metafields = await metafieldsRes.json();
+
+    let totalField = metafields.metafields.find(mf => mf.namespace === "custom" && mf.key === "total");
+    let breakdownField = metafields.metafields.find(mf => mf.namespace === "custom" && mf.key === "breakdown");
+
+    // Initialize missing metafields
+    if (!totalField) {
+      const createTotal = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`, {
+        method: "POST",
         headers: {
           "X-Shopify-Access-Token": SHOPIFY_TOKEN,
           "Content-Type": "application/json"
-        }
-      }
-    );
-    const customersData = await customersRes.json();
-    const customer = customersData.customers?.[0];
-    if (!customer) return res.status(404).json({ error: "Customer not found" });
+        },
+        body: JSON.stringify({
+          metafield: {
+            namespace: "custom",
+            key: "total",
+            type: "number_integer",
+            value: "0"
+          }
+        })
+      });
+      totalField = await createTotal.json().then(res => res.metafield);
+    }
 
-    // Step 2: Get existing metafields
-    const metafieldsRes = await fetch(
-      `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`,
-      {
+    if (!breakdownField) {
+      const createBreakdown = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`, {
+        method: "POST",
         headers: {
-          "X-Shopify-Access-Token": SHOPIFY_TOKEN
-        }
-      }
-    );
-    const metafieldsData = await metafieldsRes.json();
-    const totalField = metafieldsData.metafields.find(
-      (mf) => mf.namespace === "custom" && mf.key === "total"
-    );
-    const breakdownField = metafieldsData.metafields.find(
-      (mf) => mf.namespace === "custom" && mf.key === "breakdown"
-    );
+          "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          metafield: {
+            namespace: "custom",
+            key: "breakdown",
+            type: "json",
+            value: "[]"
+          }
+        })
+      });
+      breakdownField = await createBreakdown.json().then(res => res.metafield);
+    }
 
     const currentTotal = parseInt(totalField?.value || "0");
     const breakdown = breakdownField?.value ? JSON.parse(breakdownField.value) : [];
 
     // Prevent duplicate
-    if (breakdown.some((entry) => entry.action === action)) {
+    if (breakdown.some(entry => entry.action === action)) {
       return res.status(409).json({ error: "Already rewarded for this action" });
     }
 
-    // Step 3: Update values
+    // Add new action
     breakdown.push({
       date: new Date().toISOString(),
       action,
@@ -71,47 +101,41 @@ export default async function handler(req, res) {
 
     const newTotal = currentTotal + ACTIONS[action].points;
 
-    // Step 4: Update total metafield
-    const updateTotal = fetch(
-      `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields${totalField ? `/${totalField.id}` : ''}.json`,
-      {
-        method: totalField ? "PUT" : "POST",
-        headers: {
-          "X-Shopify-Access-Token": SHOPIFY_TOKEN,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          metafield: {
-            ...(totalField ? { id: totalField.id } : {}),
-            namespace: "custom",
-            key: "total",
-            type: "number_integer",
-            value: newTotal.toString()
-          }
-        })
-      }
-    );
+    // Update total
+    const updateTotal = fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields/${totalField.id}.json`, {
+      method: "PUT",
+      headers: {
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        metafield: {
+          id: totalField.id,
+          namespace: "custom",
+          key: "total",
+          type: "number_integer",
+          value: newTotal.toString()
+        }
+      })
+    });
 
-    // Step 5: Update breakdown metafield
-    const updateBreakdown = fetch(
-      `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields${breakdownField ? `/${breakdownField.id}` : ''}.json`,
-      {
-        method: breakdownField ? "PUT" : "POST",
-        headers: {
-          "X-Shopify-Access-Token": SHOPIFY_TOKEN,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          metafield: {
-            ...(breakdownField ? { id: breakdownField.id } : {}),
-            namespace: "custom",
-            key: "breakdown",
-            type: "json",
-            value: JSON.stringify(breakdown)
-          }
-        })
-      }
-    );
+    // Update breakdown
+    const updateBreakdown = fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields/${breakdownField.id}.json`, {
+      method: "PUT",
+      headers: {
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        metafield: {
+          id: breakdownField.id,
+          namespace: "custom",
+          key: "breakdown",
+          type: "json",
+          value: JSON.stringify(breakdown)
+        }
+      })
+    });
 
     await Promise.all([updateTotal, updateBreakdown]);
 
