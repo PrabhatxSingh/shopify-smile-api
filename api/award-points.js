@@ -140,7 +140,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify(metafieldsSetMutation)
     });
-
+    console.log(updateRes);
     const updateData = await updateRes.json();
     const userErrors = updateData.data?.metafieldsSet?.userErrors;
 
