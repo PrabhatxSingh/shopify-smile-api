@@ -99,7 +99,7 @@ export default async function handler(req, res) {
     // Step 3: Construct mutation
     const metafieldsSetMutation = {
       query: `
-        mutation metafieldsSet {
+        mutation metafieldsSet($total: String!, $breakdown: String!) {
           metafieldsSet(metafields: [
             {
               ${totalField?.id ? `id: "${totalField.id}",` : ""}
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
               namespace: "custom",
               key: "total",
               type: "number_integer",
-              value: "${newTotal}"
+              value: $total
             },
             {
               ${breakdownField?.id ? `id: "${breakdownField.id}",` : ""}
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
               namespace: "custom",
               key: "breakdown",
               type: "json",
-              value: ${JSON.stringify(breakdown)}
+              value: $breakdown
             }
           ]) {
             metafields {
@@ -129,18 +129,25 @@ export default async function handler(req, res) {
             }
           }
         }
-      `
+      `,
+      variables: {
+        total: `${newTotal}`,
+        breakdown: JSON.stringify(breakdown)
+      }
     };
 
-    const updateRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/graphql.json`, {
-      method: "POST",
-      headers: {
-        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(metafieldsSetMutation)
-    });
-    const updateData = await updateRes.json();
+
+const updateRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/graphql.json`, {
+  method: "POST",
+  headers: {
+    "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify(metafieldsSetMutation)
+});
+const updateData = await updateRes.json();
+console.log("updateData", JSON.stringify(updateData, null, 2));
+
     console.log("updateData", updateData.data);
     const userErrors = updateData.data?.metafieldsSet?.userErrors;
 
