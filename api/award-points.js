@@ -99,10 +99,10 @@ export default async function handler(req, res) {
     // Step 3: Construct mutation
     const metafieldsSetMutation = {
       query: `
-        mutation {
+        mutation metafieldsSet {
           metafieldsSet(metafields: [
             {
-              ${totalField?.id ? `id: "${totalField.id}",` : ''}
+              ${totalField?.id ? `id: "${totalField.id}",` : ""}
               ownerId: "${customerGid}",
               namespace: "custom",
               key: "total",
@@ -110,12 +110,12 @@ export default async function handler(req, res) {
               value: "${newTotal}"
             },
             {
-              ${breakdownField?.id ? `id: "${breakdownField.id}",` : ''}
+              ${breakdownField?.id ? `id: "${breakdownField.id}",` : ""}
               ownerId: "${customerGid}",
               namespace: "custom",
               key: "breakdown",
               type: "json",
-              value: ${JSON.stringify(breakdown)}
+              value: ${JSON.stringify(JSON.stringify(breakdown))}
             }
           ]) {
             metafields {
