@@ -96,6 +96,7 @@ export default async function handler(req, res) {
       breakdown = createData?.data?.metafieldsSet?.metafields?.[0] || null;
     }
 
+    
     return res.status(200).json({
       total: total?.value || "0",
       breakdown: breakdown?.value ? JSON.parse(breakdown.value) : []
