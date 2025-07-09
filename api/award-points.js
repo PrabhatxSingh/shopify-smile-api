@@ -97,44 +97,43 @@ export default async function handler(req, res) {
     const newTotal = currentTotal + ACTIONS[action].points;
 
     // Step 3: Construct mutation
-    const metafieldsSetMutation = {
-      query: `
-        mutation metafieldsSet($total: String!, $breakdown: String!) {
-          metafieldsSet(metafields: [
-            {
-              ${totalField?.id ? `id: "${totalField.id}",` : ""}
-              ownerId: "${customerGid}",
-              namespace: "custom",
-              key: "total",
-              type: "number_integer",
-              value: $total
-            },
-            {
-              ${breakdownField?.id ? `id: "${breakdownField.id}",` : ""}
-              ownerId: "${customerGid}",
-              namespace: "custom",
-              key: "breakdown",
-              type: "json",
-              value: $breakdown
-            }
-          ]) {
-            metafields {
-              id
-              key
-              value
-            }
-            userErrors {
-              field
-              message
-            }
-          }
+const metafieldsSetMutation = {
+  query: `
+    mutation metafieldsSet($total: String!, $breakdown: String!) {
+      metafieldsSet(metafields: [
+        {
+          ownerId: "${customerGid}",
+          namespace: "custom",
+          key: "total",
+          type: "number_integer",
+          value: $total
+        },
+        {
+          ownerId: "${customerGid}",
+          namespace: "custom",
+          key: "breakdown",
+          type: "json",
+          value: $breakdown
         }
-      `,
-      variables: {
-        total: `${newTotal}`,
-        breakdown: JSON.stringify(breakdown)
+      ]) {
+        metafields {
+          id
+          key
+          value
+        }
+        userErrors {
+          field
+          message
+        }
       }
-    };
+    }
+  `,
+  variables: {
+    total: `${newTotal}`,
+    breakdown: JSON.stringify(breakdown)
+  }
+};
+
 
 
 const updateRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/graphql.json`, {
