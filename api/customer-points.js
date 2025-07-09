@@ -15,47 +15,94 @@ export default async function handler(req, res) {
   const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 
   try {
-    // Search customer by email
-    const customerRes = await fetch(
-      `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/search.json?query=email:${email}`,
+    // Step 1: Get customer by email using GraphQL
+    const customerQuery = `
       {
+        customers(first: 1, query: "email:${email}") {
+          edges {
+            node {
+              id
+              metafields(first: 10, namespace: "custom") {
+                edges {
+                  node {
+                    id
+                    key
+                    value
+                    type
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const graphRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/graphql.json`, {
+      method: "POST",
+      headers: {
+        "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ query: customerQuery })
+    });
+
+    const graphData = await graphRes.json();
+    const customerNode = graphData?.data?.customers?.edges?.[0]?.node;
+
+    if (!customerNode) return res.status(404).json({ error: "Customer not found" });
+
+    const metafields = customerNode.metafields.edges.map(edge => edge.node);
+
+    const total = metafields.find(mf => mf.key === "total");
+    let breakdown = metafields.find(mf => mf.key === "breakdown");
+
+    // Step 2: Create breakdown metafield if missing
+    if (!breakdown) {
+      const createBreakdownMutation = `
+        mutation {
+          metafieldsSet(metafields: [
+            {
+              namespace: "custom",
+              key: "breakdown",
+              type: "json",
+              value: "[]",
+              ownerId: "${customerNode.id}"
+            }
+          ]) {
+            metafields {
+              id
+              key
+              value
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      const createRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/graphql.json`, {
+        method: "POST",
         headers: {
           "X-Shopify-Access-Token": SHOPIFY_TOKEN,
           "Content-Type": "application/json"
-        }
-      }
-    );
+        },
+        body: JSON.stringify({ query: createBreakdownMutation })
+      });
 
-    const customers = await customerRes.json();
-    const customer = customers.customers?.[0];
-    if (!customer) return res.status(404).json({ error: "Customer not found" });
-
-    // Fetch customer metafields
-    const metafieldsRes = await fetch(
-      `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`,
-      {
-        headers: {
-          "X-Shopify-Access-Token": SHOPIFY_TOKEN
-        }
-      }
-    );
-
-    const metafields = await metafieldsRes.json();
-
-    const total = metafields.metafields.find(
-      (mf) => mf.namespace === "custom" && mf.key === "total"
-    );
-    const breakdown = metafields.metafields.find(
-      (mf) => mf.namespace === "custom" && mf.key === "breakdown"
-    );
-    console.log("total", total);
-    console.log("breakdown", breakdown);
+      const createData = await createRes.json();
+      breakdown = createData?.data?.metafieldsSet?.metafields?.[0] || null;
+    }
+    
     return res.status(200).json({
-      total: total?.value || 0,
+      total: total?.value || "0",
       breakdown: breakdown?.value ? JSON.parse(breakdown.value) : []
     });
 
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error(err);
+    return res.status(500).json({ error: err.message || "Internal Server Error" });
   }
 }
