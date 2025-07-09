@@ -45,43 +45,56 @@ export default async function handler(req, res) {
     let breakdownField = metafields.metafields.find(mf => mf.namespace === "custom" && mf.key === "breakdown");
 
     // Initialize missing metafields
-    if (!totalField) {
-      const createTotal = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`, {
-        method: "POST",
-        headers: {
-          "X-Shopify-Access-Token": SHOPIFY_TOKEN,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          metafield: {
-            namespace: "custom",
-            key: "total",
-            type: "number_integer",
-            value: "0"
-          }
-        })
-      });
-      totalField = await createTotal.json().then(res => res.metafield);
-    }
+// Initialize missing totalField
+if (!totalField) {
+  const createTotalRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`, {
+    method: "POST",
+    headers: {
+      "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      metafield: {
+        namespace: "custom",
+        key: "total",
+        type: "number_integer",
+        value: "0"
+      }
+    })
+  });
 
-    if (!breakdownField) {
-      const createBreakdown = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`, {
-        method: "POST",
-        headers: {
-          "X-Shopify-Access-Token": SHOPIFY_TOKEN,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          metafield: {
-            namespace: "custom",
-            key: "breakdown",
-            type: "json",
-            value: "[]"
-          }
-        })
-      });
-      breakdownField = await createBreakdown.json().then(res => res.metafield);
-    }
+  const totalData = await createTotalRes.json();
+  if (!totalData.metafield) {
+    return res.status(500).json({ error: "Failed to initialize total metafield" });
+  }
+  totalField = totalData.metafield;
+}
+
+// Initialize missing breakdownField
+if (!breakdownField) {
+  const createBreakdownRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer.id}/metafields.json`, {
+    method: "POST",
+    headers: {
+      "X-Shopify-Access-Token": SHOPIFY_TOKEN,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      metafield: {
+        namespace: "custom",
+        key: "breakdown",
+        type: "json",
+        value: "[]"
+      }
+    })
+  });
+
+  const breakdownData = await createBreakdownRes.json();
+  if (!breakdownData.metafield) {
+    return res.status(500).json({ error: "Failed to initialize breakdown metafield" });
+  }
+  breakdownField = breakdownData.metafield;
+}
+
 
     const currentTotal = parseInt(totalField?.value || "0");
     const breakdown = breakdownField?.value ? JSON.parse(breakdownField.value) : [];
