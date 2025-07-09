@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     const customerGid = `gid://shopify/Customer/${customer.id}`;
-
+    console.log(customerGid);
     // Step 2: Query existing metafields via GraphQL
     const metafieldsQuery = {
       query: `
