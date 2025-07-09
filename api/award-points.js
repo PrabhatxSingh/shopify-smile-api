@@ -115,7 +115,7 @@ export default async function handler(req, res) {
               namespace: "custom",
               key: "breakdown",
               type: "json",
-              value: ${JSON.stringify(JSON.stringify(breakdown))}
+              value: ${JSON.stringify(breakdown)}
             }
           ]) {
             metafields {
