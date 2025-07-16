@@ -7,21 +7,21 @@ export default async function handler(req, res) {
 
   const { email } = req.query;
 
-  if (!email) return res.status(400).json({ error: "Email is required" });
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
+  }
 
   const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;
   const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 
   try {
-    // 1. Get Customer ID and Metafields
+    // Step 1: Get customer by email using GraphQL
     const customerQuery = `
       {
         customers(first: 1, query: "email:${email}") {
           edges {
             node {
               id
-              email
-              ordersCount
               metafields(first: 10, namespace: "custom") {
                 edges {
                   node {
@@ -54,98 +54,67 @@ export default async function handler(req, res) {
 
     const metafields = customerNode.metafields.edges.map(edge => edge.node);
 
-    let total = metafields.find(mf => mf.key === "total");
+    const total = metafields.find(mf => mf.key === "total");
     let breakdown = metafields.find(mf => mf.key === "breakdown");
 
-    let breakdownArray = breakdown?.value ? JSON.parse(breakdown.value) : [];
+    // Step 2: Create breakdown metafield if missing
+    if (!breakdown) {
+      const createBreakdownMutation = `
+        mutation {
+          metafieldsSet(metafields: [
+            {
+              namespace: "custom",
+              key: "breakdown",
+              type: "json",
+              value: "[]",
+              ownerId: "${customerNode.id}"
+            }
+          ]) {
+            metafields {
+              id
+              key
+              value
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
 
-    // 2. Check if 'order' action already exists
-    const hasOrderReward = breakdownArray.some(entry => entry.action === "order");
-
-    // 3. Fetch all orders of the customer (using REST API)
-    if (!hasOrderReward) {
-      const ordersRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/orders.json?email=${email}&status=any`, {
+      const createRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/graphql.json`, {
+        method: "POST",
         headers: {
           "X-Shopify-Access-Token": SHOPIFY_TOKEN,
           "Content-Type": "application/json"
-        }
+        },
+        body: JSON.stringify({ query: createBreakdownMutation })
       });
 
-      const ordersData = await ordersRes.json();
-      const orders = ordersData.orders || [];
+      const createData = await createRes.json();
+      console.log("createData", JSON.stringify(createData, null, 2));
 
-      const totalSpent = orders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
-      const earnedPoints = Math.floor(totalSpent / 10);
-
-      if (earnedPoints > 0) {
-        // 4. Update Breakdown Array
-        breakdownArray.push({
-          action: "order",
-          label: "Order Bonus",
-          points: earnedPoints,
-          date: new Date().toISOString()
+      if (
+        createData?.data?.metafieldsSet?.userErrors?.length > 0 ||
+        !createData?.data?.metafieldsSet?.metafields?.length
+      ) {
+        return res.status(500).json({ 
+          error: "Failed to create breakdown metafield", 
+          details: createData?.data?.metafieldsSet?.userErrors 
         });
-
-        const newTotal = (parseInt(total?.value || "0", 10) + earnedPoints).toString();
-
-        // 5. Update metafields
-        const updateMutation = `
-          mutation {
-            metafieldsSet(metafields: [
-              {
-                namespace: "custom",
-                key: "breakdown",
-                type: "json",
-                value: ${JSON.stringify(JSON.stringify(breakdownArray))},
-                ownerId: "${customerNode.id}"
-              },
-              {
-                namespace: "custom",
-                key: "total",
-                type: "number_integer",
-                value: "${newTotal}",
-                ownerId: "${customerNode.id}"
-              }
-            ]) {
-              metafields {
-                key
-                value
-              }
-              userErrors {
-                field
-                message
-              }
-            }
-          }
-        `;
-
-        const updateRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/graphql.json`, {
-          method: "POST",
-          headers: {
-            "X-Shopify-Access-Token": SHOPIFY_TOKEN,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ query: updateMutation })
-        });
-
-        const updateData = await updateRes.json();
-        const errors = updateData?.data?.metafieldsSet?.userErrors;
-
-        if (errors?.length) {
-          return res.status(500).json({ error: "Metafield update failed", details: errors });
-        }
-
-        total = { value: newTotal };
       }
-    }
 
+      breakdown = createData.data.metafieldsSet.metafields[0];
+    }
+    
     return res.status(200).json({
       total: total?.value || "0",
-      breakdown: breakdownArray
+      breakdown: breakdown?.value ? JSON.parse(breakdown.value) : []
     });
 
   } catch (err) {
-    console.error("Handler error:", err);
+    console.error(err);
     return res.status(500).json({ error: err.message || "Internal Server Error" });
   }
 }
