@@ -59,11 +59,6 @@ export default async function handler(req, res) {
     let breakdown = metafields.find(mf => mf.key === "breakdown");
     let breakdownArray = breakdown?.value ? JSON.parse(breakdown.value) : [];
 
-    // Step 2: Check if order points already exist
-    // const hasOrderPoints = breakdownArray.some(entry => entry.action === "order");
-    // if (hasOrderPoints) {
-    //   return res.status(200).json({ message: "Order points already awarded" });
-    // }
 
     // Step 3: Fetch orders using REST Admin API
     const ordersRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/orders.json?email=${email}&status=any`, {
@@ -75,30 +70,56 @@ export default async function handler(req, res) {
 
     const ordersData = await ordersRes.json();
     const orders = ordersData.orders || [];
-    console.log(orders)
-    const totalSpent = orders.reduce((sum, order) => {
+
+    let newBreakdown = [...breakdownArray];
+    let newTotal = parseInt(total?.value || "0", 10);
+
+    for (const order of orders) {
+      const orderId = order.id.toString();
       const refunds = order.refunds?.reduce((rSum, r) => {
         return rSum + r.transactions.reduce((tSum, t) => tSum + parseFloat(t.amount || 0), 0);
       }, 0) || 0;
 
       const netAmount = parseFloat(order.total_price || 0) - refunds;
-      return sum + netAmount;
-    }, 0);
-    const earnedPoints = Math.floor(totalSpent / 10);
+      const earnedPoints = Math.floor(netAmount / 10);
 
-    if (earnedPoints <= 0) {
-      return res.status(200).json({ message: "No eligible orders for rewards" });
+      const isCancelled = !!order.cancelled_at;
+      const isRefunded = order.financial_status === "refunded";
+      const isPaid = order.financial_status === "paid" || order.financial_status === "partially_paid";
+
+      const alreadyAwarded = newBreakdown.some(e => e.orderId === orderId && e.action === "order_award");
+      const alreadyReverted = newBreakdown.some(e => e.orderId === orderId && e.action === "order_revert");
+
+      // ✅ Award points if order is valid
+      if (earnedPoints > 0 && isPaid && !isCancelled && !isRefunded && !alreadyAwarded) {
+        newTotal += earnedPoints;
+        newBreakdown.push({
+          action: "order_award",
+          orderId,
+          label: `Order Bonus (${order.name || orderId})`,
+          points: earnedPoints,
+          date: new Date().toISOString()
+        });
+      }
+
+      // ❌ Revert points if order got cancelled/refunded
+      if ((isCancelled || isRefunded) && alreadyAwarded && !alreadyReverted) {
+        // Find original awarded points for this order
+        const awardEntry = newBreakdown.find(e => e.orderId === orderId && e.action === "order_award");
+        const awardedPoints = awardEntry?.points || 0;
+
+        if (awardedPoints > 0) {
+          newTotal -= awardedPoints;
+          newBreakdown.push({
+            action: "order_revert",
+            orderId,
+            label: `Order Reverted (${order.name || orderId})`,
+            points: -awardedPoints,
+            date: new Date().toISOString()
+          });
+        }
+      }
     }
-
-    // Step 4: Update metafields (breakdown + total)
-    breakdownArray.push({
-      action: "order",
-      label: "Order Bonus",
-      points: earnedPoints,
-      date: new Date().toISOString()
-    });
-
-    const newTotal = (parseInt(total?.value || "0", 10) + earnedPoints).toString();
 
     const updateMutation = `
       mutation {
