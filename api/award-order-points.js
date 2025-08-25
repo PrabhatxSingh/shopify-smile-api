@@ -60,10 +60,10 @@ export default async function handler(req, res) {
     let breakdownArray = breakdown?.value ? JSON.parse(breakdown.value) : [];
 
     // Step 2: Check if order points already exist
-    const hasOrderPoints = breakdownArray.some(entry => entry.action === "order");
-    if (hasOrderPoints) {
-      return res.status(200).json({ message: "Order points already awarded" });
-    }
+    // const hasOrderPoints = breakdownArray.some(entry => entry.action === "order");
+    // if (hasOrderPoints) {
+    //   return res.status(200).json({ message: "Order points already awarded" });
+    // }
 
     // Step 3: Fetch orders using REST Admin API
     const ordersRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/orders.json?email=${email}&status=any`, {
