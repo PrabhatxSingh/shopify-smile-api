@@ -75,6 +75,7 @@ export default async function handler(req, res) {
 
     const ordersData = await ordersRes.json();
     const orders = ordersData.orders || [];
+    console.log(orders)
     const totalSpent = orders.reduce((sum, order) => {
       const refunds = order.refunds?.reduce((rSum, r) => {
         return rSum + r.transactions.reduce((tSum, t) => tSum + parseFloat(t.amount || 0), 0);
