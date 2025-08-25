@@ -75,7 +75,14 @@ export default async function handler(req, res) {
 
     const ordersData = await ordersRes.json();
     const orders = ordersData.orders || [];
-    const totalSpent = orders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
+    const totalSpent = orders.reduce((sum, order) => {
+      const refunds = order.refunds?.reduce((rSum, r) => {
+        return rSum + r.transactions.reduce((tSum, t) => tSum + parseFloat(t.amount || 0), 0);
+      }, 0) || 0;
+
+      const netAmount = parseFloat(order.total_price || 0) - refunds;
+      return sum + netAmount;
+    }, 0);
     const earnedPoints = Math.floor(totalSpent / 10);
 
     if (earnedPoints <= 0) {
